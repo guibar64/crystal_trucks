@@ -102,7 +102,7 @@ class CommandContent:
                 else:
                     self.commands.append(parts)
 
-    def __init__(self, path=None, serial_port=None):
+    def __init__(self, path=None, serial_port=None, seed=4):
         if path is None and serial_port is None:
             print("Either file path or serial port must be configured")
         self.commands = []
@@ -125,6 +125,7 @@ class CommandContent:
             with serial.Serial(serial_port, 115200, timeout=1) as ser, open(
                 filename, "w", encoding="utf-8"
             ) as log:
+                ser.writeline("Crystal VS Trucks seed = {seed}".encode("utf-8"))
                 nb_empty_lines = 0
                 while True:
                     if nb_empty_lines > 10:
@@ -433,8 +434,16 @@ def main():
         action="store_true",
         help="competition mode, gives only the score",
     )
+      input_parser.add_argument(
+        "--seed",
+        metavar="SEED",
+        type=int,
+        help="seed for the map generation",
+        default=4,
+    )
+
     args = parser.parse_args()
-    commands = CommandContent(path=args.input, serial_port=args.serial_port)
+    commands = CommandContent(path=args.input, serial_port=args.serial_port, seed=args.seed)
 
     window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
     game_view = CrystalsVsTrucksGameView(commands=commands)
