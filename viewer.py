@@ -1,6 +1,7 @@
 import argparse
 import copy
 import datetime
+import socket
 
 import arcade
 import serial
@@ -102,8 +103,8 @@ class CommandContent:
                 else:
                     self.commands.append(parts)
 
-    def __init__(self, path=None, serial_port=None):
-        if path is None and serial_port is None:
+    def __init__(self, path=None, serial_port=None, port=None, address=None):
+        if path is None and serial_port is None and port is None:
             print("Either file path or serial port must be configured")
         self.commands = []
         self.nb_trucks = 0
@@ -118,7 +119,7 @@ class CommandContent:
         if path is not None:
             with open(path, encoding="utf-8") as file:
                 lines = list(file)
-        if serial_port is not None:
+        elif serial_port is not None:
             print("waiting for data on", serial_port)
             filename = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
             filename = f"serial_{filename}.txt"
@@ -138,6 +139,34 @@ class CommandContent:
                         nb_empty_lines = 0
                     else:
                         nb_empty_lines += 1
+        elif port is not None:
+            filename = datetime.datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
+            filename = f"socket_{filename}.txt"
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock, open(
+                filename,
+                "w",
+                encoding="utf-8",
+            ) as log:
+                sock.bind((address, port))
+                sock.listen()
+                (conn, conn_props) = sock.accept()
+                with conn:
+                    conn.settimeout(1)
+                    print(f"Connected to {conn_props[0]}:{conn_props[1]}")
+                    nb_empty_lines = 0
+                    while True:
+                        if nb_empty_lines > 10:
+                            break
+                        for line in conn.recv(1024).decode("utf-8").splitlines():
+                            line = line.rstrip()
+                            if line:
+                                log.write(line)
+                                log.write("\r\n")
+                                lines.append(line)
+                                nb_empty_lines = 0
+                            else:
+                                nb_empty_lines += 1
+
         self._read_config(lines)
 
     @property
@@ -427,14 +456,35 @@ def main():
         help="name of the serial device (115200 8N1)",
         default=None,
     )
+    input_parser.add_argument(
+        "-p",
+        "--socket-port",
+        metavar="PORT",
+        type=int,
+        help="port number",
+        default=None,
+    )
     parser.add_argument(
         "-c",
         "--competition",
         action="store_true",
         help="competition mode, gives only the score",
     )
+    parser.add_argument(
+        "-a",
+        "--address",
+        type=str,
+        default="127.0.0.1",
+        help="IP address to bind to",
+    )
+
     args = parser.parse_args()
-    commands = CommandContent(path=args.input, serial_port=args.serial_port)
+    commands = CommandContent(
+        path=args.input,
+        serial_port=args.serial_port,
+        port=args.socket_port,
+        address=args.address,
+    )
 
     window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
     game_view = CrystalsVsTrucksGameView(commands=commands)
